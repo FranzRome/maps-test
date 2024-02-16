@@ -159,7 +159,7 @@ class MapSampleState extends State<MapSample> {
     );
     setState(() {
       _markers['myLocation'] = marker;
-      _controller?.animateCamera(
+      _controller.animateCamera(
         CameraUpdate.newCameraPosition(
           CameraPosition(target: LatLng(latitude, longitude), zoom: 18, tilt: 90.0),
         ),
