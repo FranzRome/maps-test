@@ -4,6 +4,7 @@ import 'package:geocoding/geocoding.dart' as geo;
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:location/location.dart' as loc;
 import 'package:maps_test/maps_api.dart' as api;
+import 'package:url_launcher/url_Launcher.dart';
 
 class MapSample extends StatefulWidget {
   const MapSample({super.key});
@@ -18,17 +19,43 @@ class MapSampleState extends State<MapSample> {
   late final GoogleMapController _controller;
   double latitude = 0;
   double longitude = 0;
-  List<String> addresses = [
-    'Piazza Pitagora',
-    'Piazza Statuto',
-    'Le Gru',
-    'Piazza Castello',
-    'Porta Susa'
-  ];
-  late List<geo.Location> locations;
   List<LatLng> coordinates = [
     const LatLng(45.038050, 7.636810),
     const LatLng(45.076099, 7.658133),
+  ];
+
+  // Only 9/30 waypoints are shown in Maps
+  final List<PolylineWayPoint> _waypoints = [
+    PolylineWayPoint(location: 'Piazza Castello, Torino'),
+    PolylineWayPoint(location: 'Le Gru, Grugliasco'),
+    PolylineWayPoint(location: 'Mole Antonelliana'),
+    PolylineWayPoint(location: 'Piazza Statuto, Torino'),
+    PolylineWayPoint(location: 'Porta Susa, Torino'),
+    PolylineWayPoint(location: 'Palazzo Reale di Torino'),
+    PolylineWayPoint(location: 'Museo Egizio'),
+    PolylineWayPoint(location: 'Piazza Castello'),
+    PolylineWayPoint(location: 'Parco del Valentino'),
+    PolylineWayPoint(location: 'Basilica di Superga'),
+    PolylineWayPoint(location: 'Reggia di Venaria Reale'),
+    PolylineWayPoint(location: 'Parco della Mandria'),
+    PolylineWayPoint(location: 'Museo Nazionale dell\'Automobile'),
+    PolylineWayPoint(location: 'Giardini Reali'),
+    PolylineWayPoint(location: 'Museo del Cinema'),
+    PolylineWayPoint(location: 'Palazzo Madama'),
+    PolylineWayPoint(location: 'Borgo Medievale'),
+    PolylineWayPoint(location: 'Villa della Regina'),
+    PolylineWayPoint(location: 'Parco Stupinigi'),
+    PolylineWayPoint(location: 'Galleria Sabauda'),
+    PolylineWayPoint(location: 'Palazzo Carignano'),
+    PolylineWayPoint(location: 'Museo della Frutta'),
+    PolylineWayPoint(location: 'Chiesa della Gran Madre di Dio'),
+    PolylineWayPoint(location: 'Mercato di Porta Palazzo'),
+    PolylineWayPoint(location: 'Palazzo Cavour'),
+    PolylineWayPoint(location: 'Giardino Botanico Reale'),
+    PolylineWayPoint(location: 'Piazza Vittorio Veneto'),
+    PolylineWayPoint(location: 'Monte dei Cappuccini'),
+    PolylineWayPoint(location: 'Piazza Pitagora, Torino'),
+    PolylineWayPoint(location: 'Santuario di Maria Ausiliatrice'),
   ];
 
   // Object for PolylinePoints
@@ -49,10 +76,8 @@ class MapSampleState extends State<MapSample> {
       zoom: 15,
       tilt: 90,
     );
-    _createPolyLines(
-        coordinates[0].latitude, coordinates[0].longitude,
-        coordinates[1].latitude, coordinates[1].longitude
-    );
+    _createPolyLines(latitude, longitude,
+        coordinates[1].latitude, coordinates[1].longitude);
     //print(Set<Polyline>.of(polyLines.values));
   }
 
@@ -70,9 +95,9 @@ class MapSampleState extends State<MapSample> {
             initialCameraPosition: _initialCameraPosition,
             markers: _markers.values.toSet(),
             polylines: Set<Polyline>.of(polyLines.values),
-            onTap: (LatLng latlng) {
-              latitude = latlng.latitude;
-              longitude = latlng.longitude;
+            onTap: (LatLng latLng) {
+              latitude = latLng.latitude;
+              longitude = latLng.longitude;
               final marker = Marker(
                 markerId: const MarkerId('myLocation'),
                 position: LatLng(latitude, longitude),
@@ -88,17 +113,23 @@ class MapSampleState extends State<MapSample> {
               _controller = controller;
               setState(() {
                 _createPolyLines(
-                    coordinates[0].latitude, coordinates[0].longitude,
-                    coordinates[1].latitude, coordinates[1].longitude
-                );
+                    coordinates[0].latitude,
+                    coordinates[0].longitude,
+                    coordinates[1].latitude,
+                    coordinates[1].longitude);
               });
             },
           ),
         ),
         Positioned(
+          right: 20,
+          top: 10,
+          child: currentLocationButton(),
+        ),
+        Positioned(
           left: 20,
           bottom: 10,
-          child: currentLocationButton(),
+          child: openNavigationButton(),
         ),
       ]),
     );
@@ -107,9 +138,9 @@ class MapSampleState extends State<MapSample> {
   Widget currentLocationButton() {
     return ClipOval(
       child: Material(
-        color: Colors.orange.shade100, // button color
+        color: Colors.blue.shade100, // button color
         child: InkWell(
-          splashColor: Colors.orange, // inkwell color
+          splashColor: Colors.blue, // inkwell color
           child: const SizedBox(
             width: 56,
             height: 56,
@@ -120,6 +151,32 @@ class MapSampleState extends State<MapSample> {
           },
         ),
       ),
+    );
+  }
+
+  Widget openNavigationButton() {
+    return IconButton(
+      icon: const Icon(Icons.navigation),
+      color: Colors.blue.shade300,
+      onPressed: () async {
+        String origin = '${coordinates[0].latitude} ${coordinates[0].longitude}';
+        String destination = '${coordinates[1].latitude} ${coordinates[1].longitude}';
+        String mode = 'driving';
+        String waypoints = '';
+
+        for(PolylineWayPoint w in _waypoints) {
+          waypoints += '${w.location}%7C';
+        }
+        waypoints.substring(0, waypoints.length-3);
+
+        await launchUrl(Uri.parse(
+          'https://www.google.com/maps/dir/?api='
+              '1&origin=$origin'
+              '&destination=$destination'
+              '&travelmode=$mode'
+              '&waypoints=$waypoints'
+        ));
+      },
     );
   }
 
@@ -161,7 +218,8 @@ class MapSampleState extends State<MapSample> {
       _markers['myLocation'] = marker;
       _controller.animateCamera(
         CameraUpdate.newCameraPosition(
-          CameraPosition(target: LatLng(latitude, longitude), zoom: 18, tilt: 90.0),
+          CameraPosition(
+              target: LatLng(latitude, longitude), zoom: 18, tilt: 90.0),
         ),
       );
     });
@@ -179,26 +237,45 @@ class MapSampleState extends State<MapSample> {
     double destinationLatitude,
     double destinationLongitude,
   ) async {
+    _markers['A'] = Marker(
+      markerId: const MarkerId('A'),
+      position: LatLng(startLatitude, startLongitude),
+      icon: BitmapDescriptor.defaultMarkerWithHue(90),
+    );
+    _markers['B'] = Marker(
+      markerId: const MarkerId('B'),
+      position: LatLng(destinationLatitude, destinationLongitude),
+      icon: BitmapDescriptor.defaultMarkerWithHue(50),
+    );
+
     // Initializing PolylinePoints
     polylinePoints = PolylinePoints();
 
-    // Generating the list of coordinates to be used for
-    // drawing the polyLines
+    /*
+    Generating the list of coordinates to be
+    used for drawing the polyLines
+    */
     PolylineResult result = await polylinePoints.getRouteBetweenCoordinates(
       api.key, // Google Maps API Key
       PointLatLng(startLatitude, startLongitude),
       PointLatLng(destinationLatitude, destinationLongitude),
+      wayPoints: _waypoints,
       travelMode: TravelMode.driving,
+      optimizeWaypoints: true,
     );
 
     // Adding the coordinates to the list
     if (result.points.isNotEmpty) {
-      print('Found ${result.points.length} points');
-      for (var point in result.points) {
-        polylineCoordinates.add(LatLng(point.latitude, point.longitude));
+      for (final (index, point) in result.points.indexed) {
+        polylineCoordinates.add(LatLng(point.latitude,
+          point.longitude,));
+        // Create a marker
+        /*String i = index.toString();
+        _markers[i] = Marker(
+          markerId: MarkerId(i),
+          position: LatLng(point.latitude, point.longitude),
+        );*/
       }
-    } else {
-      print('Points Empty');
     }
 
     // Defining an ID
@@ -207,12 +284,14 @@ class MapSampleState extends State<MapSample> {
     // Initializing Polyline
     Polyline polyline = Polyline(
       polylineId: id,
-      color: Colors.red,
+      color: Colors.blue.shade300,
       points: polylineCoordinates,
-      width: 3,
+      width: 6,
     );
 
     // Adding the polyline to the map
-    polyLines[id] = polyline;
+    setState(() {
+      polyLines[id] = polyline;
+    });
   }
 }
