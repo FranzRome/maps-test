@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_polyline_points/flutter_polyline_points.dart';
 import 'package:geocoding/geocoding.dart' as geo;
@@ -14,49 +16,57 @@ class MapSample extends StatefulWidget {
 }
 
 class MapSampleState extends State<MapSample> {
-  /*final Completer<GoogleMapController> _controller =
-      Completer<GoogleMapController>();*/
-  late final GoogleMapController _controller;
-  double latitude = 0;
-  double longitude = 0;
+  final Completer<GoogleMapController> _controller = Completer();
+
+  //late final GoogleMapController _controller;
   List<LatLng> coordinates = [
     const LatLng(45.038050, 7.636810),
     const LatLng(45.076099, 7.658133),
   ];
+  double markerLatitude = 0;
+  double markerLongitude = 0;
+  double myLatitude = 0;
+  double myLongitude = 0;
+  loc.LocationData? currentLocation;
+  BitmapDescriptor myPositionIcon = BitmapDescriptor.defaultMarker;
+
+  final List<String> addresses = [
+    //'Corso Cosenza 81, Torino',
+    'Piazza Castello, Torino',
+    'Le Gru, Grugliasco',
+    'Mole Antonelliana, Torino',
+    'Piazza Statuto, Torino',
+    'Porta Susa, Torino',
+    'Palazzo Reale, Torino',
+    'Museo Egizio, Torino',
+    'Piazza Castello, Torino',
+    'Parco del Valentino, Torino',
+    'Basilica di Superga, Superga',
+    'Via Roma, Pino Torinese',
+    'Via Costi, Pecetto Torinese',
+    'Museo Nazionale dell\'Automobile, Torino',
+    'Corso Piemonte, Settimo Torinese',
+    'Parco Boschetto, Torino',
+    'Via Sant\'Agnese, Candiolo',
+    'Via Baretti, Moncaliri'
+        'Via Piave, Pianezza',
+    'Via Sandro Pertini, Tagliaferro',
+    'Via Cuneo, Nichelino',
+    'Via Montenero, Moncalieri',
+    'Via Andrea Costa, Collegno',
+    'Via Meucci, Reisina',
+    'Via Rieti, Pronda',
+    'Via Mongolia, Settimo Torinese',
+    'Via Frejus, Orbassano',
+    /*'Strada del Drosso, Torino',
+    'Via Moncenisio, Collegno',
+    'Via Vagliè, Settimo Torinese',
+    'Via Amendola, Nichelino',*/
+  ];
 
   // Only 9/30 waypoints are shown in Maps
-  final List<PolylineWayPoint> _waypoints = [
-    PolylineWayPoint(location: 'Piazza Castello, Torino'),
-    PolylineWayPoint(location: 'Le Gru, Grugliasco'),
-    PolylineWayPoint(location: 'Mole Antonelliana'),
-    PolylineWayPoint(location: 'Piazza Statuto, Torino'),
-    PolylineWayPoint(location: 'Porta Susa, Torino'),
-    PolylineWayPoint(location: 'Palazzo Reale di Torino'),
-    PolylineWayPoint(location: 'Museo Egizio'),
-    PolylineWayPoint(location: 'Piazza Castello'),
-    PolylineWayPoint(location: 'Parco del Valentino'),
-    PolylineWayPoint(location: 'Basilica di Superga'),
-    PolylineWayPoint(location: 'Reggia di Venaria Reale'),
-    PolylineWayPoint(location: 'Parco della Mandria'),
-    PolylineWayPoint(location: 'Museo Nazionale dell\'Automobile'),
-    PolylineWayPoint(location: 'Giardini Reali'),
-    PolylineWayPoint(location: 'Museo del Cinema'),
-    PolylineWayPoint(location: 'Palazzo Madama'),
-    PolylineWayPoint(location: 'Borgo Medievale'),
-    PolylineWayPoint(location: 'Villa della Regina'),
-    PolylineWayPoint(location: 'Parco Stupinigi'),
-    PolylineWayPoint(location: 'Galleria Sabauda'),
-    PolylineWayPoint(location: 'Palazzo Carignano'),
-    PolylineWayPoint(location: 'Museo della Frutta'),
-    PolylineWayPoint(location: 'Chiesa della Gran Madre di Dio'),
-    PolylineWayPoint(location: 'Mercato di Porta Palazzo'),
-    PolylineWayPoint(location: 'Palazzo Cavour'),
-    PolylineWayPoint(location: 'Giardino Botanico Reale'),
-    PolylineWayPoint(location: 'Piazza Vittorio Veneto'),
-    PolylineWayPoint(location: 'Monte dei Cappuccini'),
-    PolylineWayPoint(location: 'Piazza Pitagora, Torino'),
-    PolylineWayPoint(location: 'Santuario di Maria Ausiliatrice'),
-  ];
+  final List<PolylineWayPoint> _waypoints = [];
+  final Map<String, Marker> _markers = {};
 
   // Object for PolylinePoints
   late PolylinePoints polylinePoints;
@@ -64,21 +74,27 @@ class MapSampleState extends State<MapSample> {
 // List of coordinates to join
   List<LatLng> polylineCoordinates = [];
   Map<PolylineId, Polyline> polyLines = {};
-  final Map<String, Marker> _markers = {};
   late final CameraPosition _initialCameraPosition;
 
   @override
   void initState() {
     super.initState();
-    //getCurrentLocation();
+    _loadMyPositionIcon();
+
+    initOriginDestination();
+    fillMarkersFromAddresses(addresses);
+    getCurrentLocation();
+
+    for (String address in addresses) {
+      _waypoints.add(PolylineWayPoint(location: address));
+    }
+
     _initialCameraPosition = CameraPosition(
-      target: coordinates[0],
+      //target: coordinates[0],
+      target: _markers['origin']!.position,
       zoom: 15,
       tilt: 90,
     );
-    _createPolyLines(latitude, longitude,
-        coordinates[1].latitude, coordinates[1].longitude);
-    //print(Set<Polyline>.of(polyLines.values));
   }
 
   @override
@@ -93,30 +109,32 @@ class MapSampleState extends State<MapSample> {
             mapType: MapType.normal,
             myLocationEnabled: true,
             initialCameraPosition: _initialCameraPosition,
-            markers: _markers.values.toSet(),
+            markers: Set<Marker>.of(_markers.values),
+            /*FutureBuilder<Set<Marker>>(
+              initialData: Set<Marker>(),
+              future: markersFromAddresses(addresses),
+              builder: (context, snapshot){
+                return Set<Marker>.of(snapshot.data);
+              },
+            ),*/
             polylines: Set<Polyline>.of(polyLines.values),
-            onTap: (LatLng latLng) {
-              latitude = latLng.latitude;
-              longitude = latLng.longitude;
-              final marker = Marker(
-                markerId: const MarkerId('myLocation'),
-                position: LatLng(latitude, longitude),
-                infoWindow: const InfoWindow(
-                  title: '',
-                ),
-              );
-              setState(() {
-                _markers['myLocation'] = marker;
-              });
-            },
+            //onTap: (LatLng latLng) => setCurrentLocationMarker(latLng),
             onMapCreated: (GoogleMapController controller) {
-              _controller = controller;
+              //_controller = controller;
+              _controller.complete(controller);
               setState(() {
+                /*  _createPolyLines(
+                  coordinates[0].latitude,
+                  coordinates[0].longitude,
+                  coordinates[1].latitude,
+                  coordinates[1].longitude,
+                );*/
                 _createPolyLines(
-                    coordinates[0].latitude,
-                    coordinates[0].longitude,
-                    coordinates[1].latitude,
-                    coordinates[1].longitude);
+                  _markers['origin']!.position.latitude,
+                  _markers['origin']!.position.longitude,
+                  _markers['destination']!.position.latitude,
+                  _markers['destination']!.position.longitude,
+                );
               });
             },
           ),
@@ -128,7 +146,7 @@ class MapSampleState extends State<MapSample> {
         ),
         Positioned(
           left: 20,
-          bottom: 10,
+          bottom: 30,
           child: openNavigationButton(),
         ),
       ]),
@@ -159,25 +177,71 @@ class MapSampleState extends State<MapSample> {
       icon: const Icon(Icons.navigation),
       color: Colors.blue.shade300,
       onPressed: () async {
-        String origin = '${coordinates[0].latitude} ${coordinates[0].longitude}';
-        String destination = '${coordinates[1].latitude} ${coordinates[1].longitude}';
+        /* String origin =
+            '${coordinates[0].latitude} ${coordinates[0].longitude}';
+        String destination =
+            '${coordinates[1].latitude} ${coordinates[1].longitude}';*/
+        String origin = '${_markers['origin']!.position.latitude}'
+            '${_markers['origin']!.position.longitude}';
+        String destination = '${_markers['destination']!.position.latitude}'
+            '${_markers['destination']!.position.longitude}';
         String mode = 'driving';
         String waypoints = '';
 
-        for(PolylineWayPoint w in _waypoints) {
+        for (PolylineWayPoint w in _waypoints) {
           waypoints += '${w.location}%7C';
         }
-        waypoints.substring(0, waypoints.length-3);
+        waypoints.substring(0, waypoints.length - 3);
 
-        await launchUrl(Uri.parse(
-          'https://www.google.com/maps/dir/?api='
-              '1&origin=$origin'
-              '&destination=$destination'
-              '&travelmode=$mode'
-              '&waypoints=$waypoints'
-        ));
+        await launchUrl(Uri.parse('https://www.google.com/maps/dir/?api='
+            '1&origin=$origin'
+            '&destination=$destination'
+            '&travelmode=$mode'
+            '&waypoints=$waypoints'));
       },
     );
+  }
+
+  /*void getCurrentLocation() async {
+    loc.Location location = loc.Location();
+    location.getLocation().then(
+          (location) {
+        currentLocation = location;
+      },
+    );
+    GoogleMapController googleMapController = await _controller.future;
+    location.onLocationChanged.listen(
+          (newLoc) {
+        currentLocation = newLoc;
+        googleMapController.animateCamera(
+          CameraUpdate.newCameraPosition(
+            CameraPosition(
+              zoom: 13.5,
+              target: LatLng(
+                newLoc.latitude!,
+                newLoc.longitude!,
+              ),
+            ),
+          ),
+        );
+        setState(() {});
+      },
+    );
+  }*/
+
+  void setTapLocationMarker(LatLng latLng) {
+    markerLatitude = latLng.latitude;
+    markerLongitude = latLng.longitude;
+    final marker = Marker(
+      markerId: const MarkerId('myLocation'),
+      position: LatLng(markerLatitude, markerLongitude),
+      infoWindow: const InfoWindow(
+        title: '',
+      ),
+    );
+    setState(() {
+      _markers['myLocation'] = marker;
+    });
   }
 
   void getCurrentLocation() async {
@@ -205,31 +269,83 @@ class MapSampleState extends State<MapSample> {
 
     loc.LocationData currentPosition =
         await loc.Location.instance.getLocation();
-    latitude = currentPosition.latitude!;
-    longitude = currentPosition.longitude!;
-    final marker = Marker(
+    myLatitude = currentPosition.latitude!;
+    myLongitude = currentPosition.longitude!;
+    /*final marker = Marker(
+      icon: myPositionIcon,
       markerId: const MarkerId('myLocation'),
-      position: LatLng(latitude, longitude),
+      position: LatLng(myLatitude, myLongitude),
       infoWindow: const InfoWindow(
-        title: 'you can add any message here',
+        title: 'Your location',
       ),
     );
+    _markers['myLocation'] = marker;*/
+    GoogleMapController googleMapController = await _controller.future;
     setState(() {
-      _markers['myLocation'] = marker;
-      _controller.animateCamera(
+      googleMapController.animateCamera(
         CameraUpdate.newCameraPosition(
           CameraPosition(
-              target: LatLng(latitude, longitude), zoom: 18, tilt: 90.0),
+            target: LatLng(myLatitude, myLongitude),
+            zoom: 18,
+            tilt: 90.0,
+          ),
         ),
       );
     });
   }
 
-  Future<List<geo.Location>> addressToLocation(String address) {
-    //List<geo.Location> result;
-    //geo.locationFromAddress(address).then((value) => result = value);
-    return geo.locationFromAddress(address);
+  void initOriginDestination() {
+    _markers['origin'] = Marker(
+      markerId: const MarkerId('origin'),
+      position: LatLng(
+        coordinates[0].latitude,
+        coordinates[0].longitude,
+      ),
+    );
+    _markers['destination'] = Marker(
+      markerId: const MarkerId('destination'),
+      position: LatLng(
+        coordinates[1].latitude,
+        coordinates[1].longitude,
+      ),
+    );
   }
+
+  void fillMarkersFromAddresses(List<String> addresses) async {
+    for (String address in addresses) {
+      geo.Location loc = (await geo.locationFromAddress(address))[0];
+      _markers[address] = Marker(
+        position: LatLng(
+          loc.latitude,
+          loc.longitude,
+        ),
+        markerId: MarkerId(address),
+      );
+    }
+  }
+
+  Future<List<Marker>> markersFromAddresses(List<String> addresses) async {
+    List<Marker> result = [];
+
+    for (String address in addresses) {
+      geo.Location loc = (await geo.locationFromAddress(address))[0];
+      result.add(
+        Marker(
+          position: LatLng(
+            loc.latitude,
+            loc.longitude,
+          ),
+          markerId: MarkerId(address),
+        ),
+      );
+    }
+
+    return result;
+  }
+
+  /*List<Marker> markersFromFuture(Future<List<Marker>> markers){
+    return markers;
+  }*/
 
   void _createPolyLines(
     double startLatitude,
@@ -237,47 +353,45 @@ class MapSampleState extends State<MapSample> {
     double destinationLatitude,
     double destinationLongitude,
   ) async {
-    _markers['A'] = Marker(
-      markerId: const MarkerId('A'),
+    /*_markers['origin'] = Marker(
+      markerId: const MarkerId('origin'),
       position: LatLng(startLatitude, startLongitude),
       icon: BitmapDescriptor.defaultMarkerWithHue(90),
     );
-    _markers['B'] = Marker(
-      markerId: const MarkerId('B'),
+    _markers['destination'] = Marker(
+      markerId: const MarkerId('origin'),
       position: LatLng(destinationLatitude, destinationLongitude),
       icon: BitmapDescriptor.defaultMarkerWithHue(50),
-    );
+    );*/
 
-    // Initializing PolylinePoints
     polylinePoints = PolylinePoints();
 
-    /*
-    Generating the list of coordinates to be
-    used for drawing the polyLines
-    */
-    PolylineResult result = await polylinePoints.getRouteBetweenCoordinates(
-      api.key, // Google Maps API Key
-      PointLatLng(startLatitude, startLongitude),
-      PointLatLng(destinationLatitude, destinationLongitude),
-      wayPoints: _waypoints,
-      travelMode: TravelMode.driving,
-      optimizeWaypoints: true,
-    );
+    try {
+      /*
+       * Generating the list of coordinates to be
+       * used for drawing the polyLines
+       */
+      PolylineResult result = await polylinePoints.getRouteBetweenCoordinates(
+        api.key, // Google Maps API Key
+        PointLatLng(startLatitude, startLongitude),
+        PointLatLng(destinationLatitude, destinationLongitude),
+        wayPoints: _waypoints,
+        travelMode: TravelMode.driving,
+        optimizeWaypoints: true,
+      );
 
-    // Adding the coordinates to the list
-    if (result.points.isNotEmpty) {
-      for (final (index, point) in result.points.indexed) {
-        polylineCoordinates.add(LatLng(point.latitude,
-          point.longitude,));
-        // Create a marker
-        /*String i = index.toString();
-        _markers[i] = Marker(
-          markerId: MarkerId(i),
-          position: LatLng(point.latitude, point.longitude),
-        );*/
+      // Adding the coordinates to the list
+      if (result.points.isNotEmpty) {
+        for (final PointLatLng point in result.points) {
+          polylineCoordinates.add(LatLng(
+            point.latitude,
+            point.longitude,
+          ));
+        }
       }
+    } on Exception catch (e) {
+      print('Exception: ${e.toString()}');
     }
-
     // Defining an ID
     PolylineId id = const PolylineId('poly');
 
@@ -289,9 +403,23 @@ class MapSampleState extends State<MapSample> {
       width: 6,
     );
 
-    // Adding the polyline to the map
+    // Adding the polyline to the map and updating the UI
     setState(() {
       polyLines[id] = polyline;
     });
+  }
+
+  void _loadMyPositionIcon() {
+    BitmapDescriptor.fromAssetImage(
+      const ImageConfiguration(
+        devicePixelRatio: 20,
+        size: Size(1, 1),
+      ),
+      'assets/images/person.png',
+    ).then((icon) => {
+          setState(() {
+            myPositionIcon = icon;
+          })
+        });
   }
 }
