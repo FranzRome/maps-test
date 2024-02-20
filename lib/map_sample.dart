@@ -16,22 +16,18 @@ class MapSample extends StatefulWidget {
 }
 
 class MapSampleState extends State<MapSample> {
+  //region Fields
+
   final Completer<GoogleMapController> _controller = Completer();
-
-  //late final GoogleMapController _controller;
-  List<LatLng> coordinates = [
-    const LatLng(45.038050, 7.636810),
-    const LatLng(45.076099, 7.658133),
-  ];
-  double markerLatitude = 0;
-  double markerLongitude = 0;
-  double myLatitude = 0;
-  double myLongitude = 0;
+  double _markerLatitude = 0;
+  double _markerLongitude = 0;
+  double _myLatitude = 0;
+  double _myLongitude = 0;
   loc.LocationData? currentLocation;
-  BitmapDescriptor myPositionIcon = BitmapDescriptor.defaultMarker;
+  BitmapDescriptor _myPositionIcon = BitmapDescriptor.defaultMarker;
 
-  final List<String> addresses = [
-    //'Corso Cosenza 81, Torino',
+  final List<String> _addresses = [
+    'Corso Cosenza 81, Torino',
     'Piazza Castello, Torino',
     'Le Gru, Grugliasco',
     'Mole Antonelliana, Torino',
@@ -55,105 +51,111 @@ class MapSampleState extends State<MapSample> {
     'Via Montenero, Moncalieri',
     'Via Andrea Costa, Collegno',
     'Via Meucci, Reisina',
-    'Via Rieti, Pronda',
-    'Via Mongolia, Settimo Torinese',
-    'Via Frejus, Orbassano',
+    //'Via Rieti, Pronda',
+    //'Via Mongolia, Settimo Torinese',
+    //'Via Frejus, Orbassano',
     /*'Strada del Drosso, Torino',
     'Via Moncenisio, Collegno',
     'Via Vagliè, Settimo Torinese',
     'Via Amendola, Nichelino',*/
   ];
 
-  // Only 9/30 waypoints are shown in Maps
-  final List<PolylineWayPoint> _waypoints = [];
-  final Map<String, Marker> _markers = {};
-
-  // Object for PolylinePoints
   late PolylinePoints polylinePoints;
 
-// List of coordinates to join
-  List<LatLng> polylineCoordinates = [];
-  Map<PolylineId, Polyline> polyLines = {};
+  final Map<String, Marker> _markers = {};
+  final List<LatLng> _originDestination = [
+    const LatLng(45.038050, 7.636810),
+    const LatLng(45.076099, 7.658133),
+  ];
+  final Map<String, PolylineWayPoint> _waypoints = {};
+  final Map<PolylineId, Polyline> _polyLines = {};
   late final CameraPosition _initialCameraPosition;
+
+  //endregion
+
+  //region Init
 
   @override
   void initState() {
     super.initState();
+    _initPolylinePoints();
+    _initOriginDestination();
+    _fillMarkersFromAddresses(_addresses);
+    _createWaypoints(_addresses);
+    _createPolyLines(
+      _originDestination[0].latitude,
+      _originDestination[0].longitude,
+      _originDestination[1].latitude,
+      _originDestination[1].longitude,
+      _waypoints,
+    );
     _loadMyPositionIcon();
-
-    initOriginDestination();
-    fillMarkersFromAddresses(addresses);
-    getCurrentLocation();
-
-    for (String address in addresses) {
-      _waypoints.add(PolylineWayPoint(location: address));
-    }
-
+    _getCurrentLocation();
     _initialCameraPosition = CameraPosition(
-      //target: coordinates[0],
-      target: _markers['origin']!.position,
-      zoom: 15,
+      target: _originDestination[0],
       tilt: 90,
+      zoom: 18,
+      bearing: 0,
     );
   }
+
+  //endregion
+
+  //region Widgets
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: Stack(children: [
-        Container(
-          margin: const EdgeInsets.symmetric(horizontal: 0),
-          width: double.infinity,
-          height: double.infinity,
-          child: GoogleMap(
+        body: Stack(children: [
+          GoogleMap(
             mapType: MapType.normal,
             myLocationEnabled: true,
             initialCameraPosition: _initialCameraPosition,
             markers: Set<Marker>.of(_markers.values),
-            /*FutureBuilder<Set<Marker>>(
-              initialData: Set<Marker>(),
-              future: markersFromAddresses(addresses),
-              builder: (context, snapshot){
-                return Set<Marker>.of(snapshot.data);
-              },
-            ),*/
-            polylines: Set<Polyline>.of(polyLines.values),
+            //Set<Marker>.of(_markers.values),
+            polylines: Set<Polyline>.of(_polyLines.values),
             //onTap: (LatLng latLng) => setCurrentLocationMarker(latLng),
             onMapCreated: (GoogleMapController controller) {
               //_controller = controller;
               _controller.complete(controller);
               setState(() {
-                /*  _createPolyLines(
-                  coordinates[0].latitude,
-                  coordinates[0].longitude,
-                  coordinates[1].latitude,
-                  coordinates[1].longitude,
-                );*/
+                /*_createPolyLines(
+                        _markers['origin']!.position.latitude,
+                        _markers['origin']!.position.longitude,
+                        _markers['destination']!.position.latitude,
+                        _markers['destination']!.position.longitude,
+                        _waypointsFromAddresses(_addresses),
+                      );*/
                 _createPolyLines(
-                  _markers['origin']!.position.latitude,
-                  _markers['origin']!.position.longitude,
-                  _markers['destination']!.position.latitude,
-                  _markers['destination']!.position.longitude,
+                  _originDestination[0].latitude,
+                  _originDestination[0].longitude,
+                  _originDestination[1].latitude,
+                  _originDestination[1].longitude,
+                  _waypointsFromAddresses(_addresses),
                 );
               });
             },
+            onTap: (latlng) {
+              setState(() {
+
+            });
+            },
           ),
-        ),
-        Positioned(
-          right: 20,
-          top: 10,
-          child: currentLocationButton(),
-        ),
-        Positioned(
-          left: 20,
-          bottom: 30,
-          child: openNavigationButton(),
-        ),
-      ]),
+          Positioned(
+            right: 20,
+            top: 10,
+            child: _currentLocationButton(),
+          ),
+          /*Positioned(
+              left: 20,
+              bottom: 30,
+              child: _openNavigationButton(),
+            ),*/
+        ]),
     );
   }
 
-  Widget currentLocationButton() {
+  Widget _currentLocationButton() {
     return ClipOval(
       child: Material(
         color: Colors.blue.shade100, // button color
@@ -165,14 +167,14 @@ class MapSampleState extends State<MapSample> {
             child: Icon(Icons.my_location),
           ),
           onTap: () {
-            getCurrentLocation();
+            _getCurrentLocation();
           },
         ),
       ),
     );
   }
 
-  Widget openNavigationButton() {
+  Widget _openNavigationButton(Map<String, PolylineWayPoint> waypoints) {
     return IconButton(
       icon: const Icon(Icons.navigation),
       color: Colors.blue.shade300,
@@ -181,17 +183,19 @@ class MapSampleState extends State<MapSample> {
             '${coordinates[0].latitude} ${coordinates[0].longitude}';
         String destination =
             '${coordinates[1].latitude} ${coordinates[1].longitude}';*/
-        String origin = '${_markers['origin']!.position.latitude}'
-            '${_markers['origin']!.position.longitude}';
-        String destination = '${_markers['destination']!.position.latitude}'
-            '${_markers['destination']!.position.longitude}';
+        String origin =
+            '${_markers['origin']!.position.latitude} ${_markers['origin']!
+            .position.longitude}';
+        String destination =
+            '${_markers['destination']!.position
+            .latitude} ${_markers['destination']!.position.longitude}';
         String mode = 'driving';
-        String waypoints = '';
+        String wp = '';
 
-        for (PolylineWayPoint w in _waypoints) {
-          waypoints += '${w.location}%7C';
+        for (PolylineWayPoint w in waypoints.values) {
+          wp += '${w.location}%7C';
         }
-        waypoints.substring(0, waypoints.length - 3);
+        wp = wp.substring(0, waypoints.length - 3);
 
         await launchUrl(Uri.parse('https://www.google.com/maps/dir/?api='
             '1&origin=$origin'
@@ -201,6 +205,8 @@ class MapSampleState extends State<MapSample> {
       },
     );
   }
+
+  //endregion
 
   /*void getCurrentLocation() async {
     loc.Location location = loc.Location();
@@ -229,22 +235,39 @@ class MapSampleState extends State<MapSample> {
     );
   }*/
 
-  void setTapLocationMarker(LatLng latLng) {
-    markerLatitude = latLng.latitude;
-    markerLongitude = latLng.longitude;
-    final marker = Marker(
-      markerId: const MarkerId('myLocation'),
-      position: LatLng(markerLatitude, markerLongitude),
-      infoWindow: const InfoWindow(
-        title: '',
-      ),
-    );
-    setState(() {
-      _markers['myLocation'] = marker;
-    });
+  //region Utilities
+
+  void _initPolylinePoints() {
+    polylinePoints = PolylinePoints();
   }
 
-  void getCurrentLocation() async {
+  Stream<Object> _getInformations() {
+    late final StreamController<Object> controller;
+    controller = StreamController<Object>(
+      onListen: () async {
+        Map<String, Marker> markers = await _markersFromAddresses(_addresses);
+        controller.add(markers);
+
+        LatLng origin = markers['origin']!.position,
+            destination = markers['destination']!.position;
+        Map<String, PolylineWayPoint> waypoints =
+        _waypointsFromAddresses(_addresses);
+        Polyline polyline = await _getPolyline(
+          origin.latitude,
+          origin.longitude,
+          destination.latitude,
+          destination.longitude,
+          waypoints,
+        );
+        controller.add(waypoints);
+
+        await controller.close();
+      },
+    );
+    return controller.stream;
+  }
+
+  void _getCurrentLocation() async {
     bool serviceEnabled;
     loc.PermissionStatus permissionGranted;
 
@@ -268,9 +291,9 @@ class MapSampleState extends State<MapSample> {
     }
 
     loc.LocationData currentPosition =
-        await loc.Location.instance.getLocation();
-    myLatitude = currentPosition.latitude!;
-    myLongitude = currentPosition.longitude!;
+    await loc.Location.instance.getLocation();
+    _myLatitude = currentPosition.latitude!;
+    _myLongitude = currentPosition.longitude!;
     /*final marker = Marker(
       icon: myPositionIcon,
       markerId: const MarkerId('myLocation'),
@@ -285,7 +308,7 @@ class MapSampleState extends State<MapSample> {
       googleMapController.animateCamera(
         CameraUpdate.newCameraPosition(
           CameraPosition(
-            target: LatLng(myLatitude, myLongitude),
+            target: LatLng(_myLatitude, _myLongitude),
             zoom: 18,
             tilt: 90.0,
           ),
@@ -294,24 +317,24 @@ class MapSampleState extends State<MapSample> {
     });
   }
 
-  void initOriginDestination() {
+  void _initOriginDestination() {
     _markers['origin'] = Marker(
       markerId: const MarkerId('origin'),
       position: LatLng(
-        coordinates[0].latitude,
-        coordinates[0].longitude,
+        _originDestination[0].latitude,
+        _originDestination[0].longitude,
       ),
     );
     _markers['destination'] = Marker(
       markerId: const MarkerId('destination'),
       position: LatLng(
-        coordinates[1].latitude,
-        coordinates[1].longitude,
+        _originDestination[1].latitude,
+        _originDestination[1].longitude,
       ),
     );
   }
 
-  void fillMarkersFromAddresses(List<String> addresses) async {
+  void _fillMarkersFromAddresses(List<String> addresses) async {
     for (String address in addresses) {
       geo.Location loc = (await geo.locationFromAddress(address))[0];
       _markers[address] = Marker(
@@ -324,18 +347,52 @@ class MapSampleState extends State<MapSample> {
     }
   }
 
-  Future<List<Marker>> markersFromAddresses(List<String> addresses) async {
-    List<Marker> result = [];
+  void _setTapLocationMarker(LatLng latLng) {
+    _markerLatitude = latLng.latitude;
+    _markerLongitude = latLng.longitude;
+    final marker = Marker(
+      markerId: const MarkerId('myLocation'),
+      position: LatLng(_markerLatitude, _markerLongitude),
+      infoWindow: const InfoWindow(
+        title: '',
+      ),
+    );
+    setState(() {
+      _markers['myLocation'] = marker;
+    });
+  }
 
-    for (String address in addresses) {
+  void _createWaypoints(List<String> addresses) {
+    for (var e in addresses) {
+      _waypoints[e] = PolylineWayPoint(location: e);
+    }
+  }
+
+  Map<String, PolylineWayPoint> _waypointsFromAddresses(
+      List<String> addresses) {
+    Map<String, PolylineWayPoint> result = {};
+
+    for (var e in addresses) {
+      result[e] = PolylineWayPoint(location: e);
+    }
+
+    return result;
+  }
+
+  Future<Map<String, Marker>> _markersFromAddresses(
+      List<String> addresses) async {
+    Map<String, Marker> result = {};
+
+    for (final (int index, String address) in addresses.indexed) {
       geo.Location loc = (await geo.locationFromAddress(address))[0];
-      result.add(
-        Marker(
-          position: LatLng(
-            loc.latitude,
-            loc.longitude,
-          ),
-          markerId: MarkerId(address),
+      String key = (index == addresses.length - 1
+          ? 'destination'
+          : (index == 0 ? 'origin' : address));
+      result[key] = Marker(
+        markerId: MarkerId(key),
+        position: LatLng(
+          loc.latitude,
+          loc.longitude,
         ),
       );
     }
@@ -347,57 +404,81 @@ class MapSampleState extends State<MapSample> {
     return markers;
   }*/
 
-  void _createPolyLines(
-    double startLatitude,
-    double startLongitude,
-    double destinationLatitude,
-    double destinationLongitude,
-  ) async {
-    /*_markers['origin'] = Marker(
-      markerId: const MarkerId('origin'),
-      position: LatLng(startLatitude, startLongitude),
-      icon: BitmapDescriptor.defaultMarkerWithHue(90),
-    );
-    _markers['destination'] = Marker(
-      markerId: const MarkerId('origin'),
-      position: LatLng(destinationLatitude, destinationLongitude),
-      icon: BitmapDescriptor.defaultMarkerWithHue(50),
-    );*/
 
-    polylinePoints = PolylinePoints();
+  Future<Polyline> _getPolyline(double startLatitude,
+      double startLongitude,
+      double destinationLatitude,
+      double destinationLongitude,
+      Map<String, PolylineWayPoint> waypoints,) async {
+    List<LatLng> polylineCoordinates = [];
 
-    try {
-      /*
+    /*
        * Generating the list of coordinates to be
        * used for drawing the polyLines
        */
-      PolylineResult result = await polylinePoints.getRouteBetweenCoordinates(
-        api.key, // Google Maps API Key
-        PointLatLng(startLatitude, startLongitude),
-        PointLatLng(destinationLatitude, destinationLongitude),
-        wayPoints: _waypoints,
-        travelMode: TravelMode.driving,
-        optimizeWaypoints: true,
-      );
+    PolylineResult result = await polylinePoints.getRouteBetweenCoordinates(
+      api.key, // Google Maps API Key
+      PointLatLng(startLatitude, startLongitude),
+      PointLatLng(destinationLatitude, destinationLongitude),
+      wayPoints: List<PolylineWayPoint>.of(waypoints.values),
+      travelMode: TravelMode.driving,
+      optimizeWaypoints: true,
+    );
 
-      // Adding the coordinates to the list
-      if (result.points.isNotEmpty) {
-        for (final PointLatLng point in result.points) {
-          polylineCoordinates.add(LatLng(
-            point.latitude,
-            point.longitude,
-          ));
-        }
+    // Adding the coordinates to the list
+    if (result.points.isNotEmpty) {
+      for (final PointLatLng point in result.points) {
+        polylineCoordinates.add(LatLng(
+          point.latitude,
+          point.longitude,
+        ));
       }
-    } on Exception catch (e) {
-      print('Exception: ${e.toString()}');
     }
-    // Defining an ID
-    PolylineId id = const PolylineId('poly');
 
     // Initializing Polyline
     Polyline polyline = Polyline(
-      polylineId: id,
+      polylineId: const PolylineId('poly'),
+      color: Colors.blue.shade300,
+      points: polylineCoordinates,
+      width: 6,
+    );
+
+    return polyline;
+  }
+
+  void _createPolyLines(double startLatitude,
+      double startLongitude,
+      double destinationLatitude,
+      double destinationLongitude,
+      Map<String, PolylineWayPoint> waypoints,) async {
+    List<LatLng> polylineCoordinates = [];
+
+    /*
+       * Generating the list of coordinates to be
+       * used for drawing the polyLines
+       */
+    PolylineResult result = await polylinePoints.getRouteBetweenCoordinates(
+      api.key, // Google Maps API Key
+      PointLatLng(startLatitude, startLongitude),
+      PointLatLng(destinationLatitude, destinationLongitude),
+      wayPoints: List<PolylineWayPoint>.of(waypoints.values),
+      travelMode: TravelMode.driving,
+      optimizeWaypoints: true,
+    );
+
+    // Adding the coordinates to the list
+    if (result.points.isNotEmpty) {
+      for (final PointLatLng point in result.points) {
+        polylineCoordinates.add(LatLng(
+          point.latitude,
+          point.longitude,
+        ));
+      }
+    }
+
+    // Initializing Polyline
+    Polyline polyline = Polyline(
+      polylineId: const PolylineId('poly'),
       color: Colors.blue.shade300,
       points: polylineCoordinates,
       width: 6,
@@ -405,7 +486,7 @@ class MapSampleState extends State<MapSample> {
 
     // Adding the polyline to the map and updating the UI
     setState(() {
-      polyLines[id] = polyline;
+      _polyLines[polyline.mapsId] = polyline;
     });
   }
 
@@ -416,10 +497,14 @@ class MapSampleState extends State<MapSample> {
         size: Size(1, 1),
       ),
       'assets/images/person.png',
-    ).then((icon) => {
-          setState(() {
-            myPositionIcon = icon;
-          })
-        });
+    ).then((icon) =>
+    {
+      setState(() {
+        _myPositionIcon = icon;
+      })
+    });
   }
+
+//endregion
+
 }
